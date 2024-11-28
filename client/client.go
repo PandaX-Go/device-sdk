@@ -5,7 +5,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"log"
+	"regexp"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -13,6 +16,11 @@ import (
 	"github.com/PandaXGO/device-sdk-go/spec"
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
+
+type RpcPayload struct {
+	Method string         `json: "method"`
+	Params map[string]any `json: "params"`
+}
 
 // Client is the interface for device-sdk-go client implementation.
 type Client interface {
@@ -25,17 +33,15 @@ type Client interface {
 	// PublishAttribute  for publish attribute msg
 	PublishAttribute(ctx context.Context, payload interface{}) error
 
-	// SubscribeRaw  sub attribute change
-	SubscribeRaw(ctx context.Context, handler MessageHandler) error
+	// PublishTelemetry  for publish telemetry msg
+	PublishGatewayTelemetry(ctx context.Context, payload interface{}) error
 
-	// SubscribeAttribute  sub attribute change
-	SubscribeAttribute(ctx context.Context, handler MessageHandler) error
+	// PublishAttribute  for publish attribute msg
+	PublishGatewayAttribute(ctx context.Context, payload interface{}) error
 
-	// SubscribeCommand sub command
-	SubscribeCommand(ctx context.Context, handler MessageHandler) error
+	SubscribeRpcReq(ctx context.Context, handler MessageHandler) error
 
-	// CommandResponse  response  command
-	CommandResponse(ctx context.Context, commandName string, payload interface{}) error
+	PublishRpcResponse(ctx context.Context, commandName, requestId string, payload interface{}) error
 
 	// Close client
 	Close()
@@ -70,16 +76,20 @@ func (mc *MqttClient) PublishAttribute(ctx context.Context, payload interface{})
 	return mc.publish(spec.AttributeTopic, payload)
 }
 
-func (mc *MqttClient) SubscribeRaw(ctx context.Context, handler MessageHandler) error {
-	return mc.on(spec.RawTopic, handler)
+func (mc *MqttClient) PublishGatewayTelemetry(ctx context.Context, payload interface{}) error {
+	return mc.publish(spec.TelemetryTopic, payload)
 }
 
-func (mc *MqttClient) SubscribeAttribute(ctx context.Context, handler MessageHandler) error {
-	return mc.on(spec.AttributeTopic, handler)
+func (mc *MqttClient) PublishGatewayAttribute(ctx context.Context, payload interface{}) error {
+	return mc.publish(spec.AttributeTopic, payload)
 }
 
-func (mc *MqttClient) CommandResponse(ctx context.Context, commandName string, payload interface{}) error {
-	// 组装命令返回
+func (mc *MqttClient) SubscribeRpcReq(ctx context.Context, handler MessageHandler) error {
+	return mc.on(spec.RpcReqTopic, handler)
+}
+
+func (mc *MqttClient) PublishRpcResponse(ctx context.Context, commandName, requestId string, payload interface{}) error {
+	topic := fmt.Sprintf(spec.RpcRespTopic.String(), requestId)
 	resp, _ := json.Marshal(map[string]interface{}{
 		commandName: map[string]interface{}{
 			"output": map[string]interface{}{
@@ -88,11 +98,7 @@ func (mc *MqttClient) CommandResponse(ctx context.Context, commandName string, p
 			},
 		},
 	})
-	return mc.publish(spec.CommandRespTopic, resp)
-}
-
-func (mc *MqttClient) SubscribeCommand(ctx context.Context, handler MessageHandler) error {
-	return mc.on(spec.CommandTopic, handler)
+	return mc.client.Publish(topic, byte(mc.opts.qos), false, resp).Error()
 }
 
 func (mc *MqttClient) Close() {
@@ -200,18 +206,19 @@ func (mc *MqttClient) on(topic spec.Topic, handler MessageHandler) error {
 		if err != nil {
 			return
 		}
-		if topic == spec.CommandTopic && resp != nil {
-			// TODO: try
+		if topic == spec.RpcReqTopic && resp != nil {
+			re := regexp.MustCompile(`v1/devices/me/rpc/request/(.+)`)
+			requestId := re.FindStringSubmatch(msg.Topic())
+			log.Println("验证请求ID", requestId)
+			if len(requestId) < 1 {
+				return
+			}
 			py := msg.Payload()
-			vv := map[string]interface{}{}
+			vv := RpcPayload{}
 			if err := json.Unmarshal(py, &vv); err != nil {
 				return
 			}
-			// 只会有一个方法
-			for method, _ := range vv {
-				_ = mc.CommandResponse(context.TODO(), method, resp)
-				break
-			}
+			_ = mc.PublishRpcResponse(context.TODO(), vv.Method, requestId[0], resp)
 		}
 	}).Error()
 }

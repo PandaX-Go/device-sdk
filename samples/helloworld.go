@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	_brokerAddr = "tcp://192.168.123.9:31883"
-	_username   = "iotd-43b5b654-5d29-4464-9a87-822d3aa0957d"
-	_pwd        = "ZjI1M2IyNGMtNjNjZi0zMzM5LWFlMDMtYjBkOWVlYTQ4ZDNh"
+	_brokerAddr = "tcp://127.0.0.1:1883"
+	_username   = "ZjI1M2IyNGMtNjNjZi0zMzM5LWFlMDMtYjBkOWVlYTQ4ZDNh"
+	_pwd        = ""
 )
 
 func main() {
@@ -30,9 +30,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	_ = cli.SubscribeRaw(context.TODO(), rawTopicHandler)
-	_ = cli.SubscribeAttribute(context.TODO(), attributesTopicHandler)
-	_ = cli.SubscribeCommand(context.TODO(), commandsTopicHandler)
+	_ = cli.SubscribeRpcReq(context.TODO(), commandsTopicHandler)
 
 	tm := time.Second * 1
 
@@ -45,19 +43,9 @@ func main() {
 	select {}
 }
 
-func attributesTopicHandler(message client.Message) (interface{}, error) {
-	fmt.Printf("attributes=%s\n", string(message.Payload()))
-	return nil, nil
-}
-
 func commandsTopicHandler(message client.Message) (interface{}, error) {
 	fmt.Printf("commands=%s\n", string(message.Payload()))
 	return "success", nil
-}
-
-func rawTopicHandler(message client.Message) (interface{}, error) {
-	fmt.Printf("rawTopic=%s\n", string(message.Payload()))
-	return nil, nil
 }
 
 func deviceValue() ([]byte, error) {
