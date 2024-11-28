@@ -89,12 +89,7 @@ func (mc *MqttClient) SubscribeRpcReq(ctx context.Context, handler MessageHandle
 
 func (mc *MqttClient) PublishRpcResponse(ctx context.Context, commandName, requestId string, payload interface{}) error {
 	topic := fmt.Sprintf(spec.RpcRespTopic.String(), requestId)
-	resp, _ := json.Marshal(map[string]interface{}{
-		commandName: map[string]interface{}{
-			"output": payload,
-		},
-	})
-	return mc.client.Publish(topic, byte(mc.opts.qos), false, resp).Error()
+	return mc.client.Publish(topic, byte(mc.opts.qos), false, payload).Error()
 }
 
 func (mc *MqttClient) Close() {
