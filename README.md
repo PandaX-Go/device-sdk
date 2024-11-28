@@ -14,7 +14,6 @@ golang version：1.20+
 - 支持 MQTT/MQTTs.
 - 支持自动重连.
 
-> 未来会新增断线后缓存数据的功能目前暂未实现
 
 ## SDK API 列表
 
