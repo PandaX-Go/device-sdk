@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"log"
 	"regexp"
-	"time"
 
 	"github.com/hashicorp/go-multierror"
 
@@ -92,10 +91,7 @@ func (mc *MqttClient) PublishRpcResponse(ctx context.Context, commandName, reque
 	topic := fmt.Sprintf(spec.RpcRespTopic.String(), requestId)
 	resp, _ := json.Marshal(map[string]interface{}{
 		commandName: map[string]interface{}{
-			"output": map[string]interface{}{
-				"ts":    time.Now().Unix(),
-				"value": payload,
-			},
+			"output": payload,
 		},
 	})
 	return mc.client.Publish(topic, byte(mc.opts.qos), false, resp).Error()
